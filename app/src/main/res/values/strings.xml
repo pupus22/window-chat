@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Window</string>
     <string name="default_notification_channel_id">window_chat_messages</string>
-    <string name="cloudinary_cloud_name">GANTI_CLOUD_NAME</string>
-    <string name="cloudinary_upload_preset">GANTI_UPLOAD_PRESET_UNSIGNED</string>
+    <string name="cloudinary_cloud_name">dswbqhpc7</string>
+    <string name="cloudinary_upload_preset">window_unsigned</string>
 </resources>
