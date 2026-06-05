@@ -19,7 +19,12 @@ jobs:
         run: |
           set -e
 
-          ZIP_FILE="$(ls *.zip | head -n 1)"
+          # Prioritaskan ZIP Cloudinary kalau ada
+          if [ -f "window-chat-cloudinary.zip" ]; then
+            ZIP_FILE="window-chat-cloudinary.zip"
+          else
+            ZIP_FILE="$(ls *.zip 2>/dev/null | head -n 1 || true)"
+          fi
 
           if [ -z "$ZIP_FILE" ]; then
             echo "Tidak ada file ZIP di repository."
@@ -27,6 +32,15 @@ jobs:
           fi
 
           echo "ZIP ditemukan: $ZIP_FILE"
+
+          # Simpan google-services.json asli Firebase agar tidak ketimpa
+          if [ -f "app/google-services.json" ]; then
+            mkdir -p /tmp/window_backup
+            cp "app/google-services.json" "/tmp/window_backup/google-services.json"
+            echo "google-services.json lama berhasil diamankan."
+          else
+            echo "Belum ada google-services.json lama untuk diamankan."
+          fi
 
           rm -rf /tmp/window_unzip
           mkdir -p /tmp/window_unzip
@@ -44,14 +58,36 @@ jobs:
 
           echo "Mengambil isi dari: $SRC_DIR"
 
-          # Penting:
-          # Jangan ikut extract .github dari ZIP,
+          # Jangan extract .github dari ZIP,
           # karena GitHub Actions tidak boleh membuat workflow baru otomatis.
           rm -rf "$SRC_DIR/.github"
 
+          # Jangan pakai google-services.json dari ZIP.
+          # Kita pakai google-services.json asli Firebase yang sudah Mas pasang.
+          rm -f "$SRC_DIR/app/google-services.json"
+
+          # Bersihkan project lama, tapi jangan hapus folder .github
+          rm -rf app
+          rm -rf functions
+          rm -f build.gradle
+          rm -f settings.gradle
+          rm -f firebase.json
+          rm -f firestore.rules
+          rm -f storage.rules
+          rm -f README.md
+
+          # Copy isi project baru
           rsync -a "$SRC_DIR"/ ./
 
-          rm -f "$ZIP_FILE"
+          # Kembalikan google-services.json asli Firebase
+          if [ -f "/tmp/window_backup/google-services.json" ]; then
+            mkdir -p app
+            cp "/tmp/window_backup/google-services.json" "app/google-services.json"
+            echo "google-services.json asli Firebase dikembalikan."
+          fi
+
+          # Hapus semua ZIP dari repo setelah berhasil extract
+          rm -f ./*.zip
 
       - name: Commit extracted files
         shell: bash
@@ -64,6 +100,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Tidak ada perubahan."
           else
-            git commit -m "Extract Window project files"
+            git commit -m "Extract Window Cloudinary project files"
             git push
           fi
