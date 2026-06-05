@@ -29,6 +29,7 @@ import android.view.WindowInsets;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -735,6 +736,16 @@ public class MainActivity extends AppCompatActivity {
         attach.setText("📎");
         attach.setAllCaps(false);
         messageInput = input("Ketik pesan...");
+        messageInput.setSingleLine(false);
+        messageInput.setMinLines(1);
+        messageInput.setMaxLines(4);
+        messageInput.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        messageInput.setHorizontallyScrolling(false);
+        messageInput.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        messageInput.setImeOptions(EditorInfo.IME_ACTION_NONE);
+        messageInput.setMinHeight(dp(48));
         messageInput.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence value, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence value, int start, int before, int count) {
@@ -744,7 +755,7 @@ public class MainActivity extends AppCompatActivity {
         });
         Button send = button("➤");
         bar.addView(attach, new LinearLayout.LayoutParams(dp(56), dp(48)));
-        bar.addView(messageInput, new LinearLayout.LayoutParams(0, dp(48), 1));
+        bar.addView(messageInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         bar.addView(send, new LinearLayout.LayoutParams(dp(64), dp(48)));
         inputArea.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(inputArea);
