@@ -1302,7 +1302,7 @@ public class MainActivity extends AppCompatActivity {
                 bubble.addView(body);
             }
 
-            TextView meta = tv(statusText(d, mine), 11, mine ? Color.WHITE : Color.GRAY, 0);
+            TextView meta = tv(statusText(d, mine), 11, statusColor(d, mine), 0);
             meta.setGravity(Gravity.END);
             meta.setPadding(0, dp(4), 0, 0);
             bubble.addView(meta);
@@ -1329,27 +1329,40 @@ public class MainActivity extends AppCompatActivity {
     private void attachSwipeToReply(View bubble, DocumentSnapshot d) {
         final float[] downX = new float[1];
         final float[] downY = new float[1];
+        final boolean[] replied = new boolean[1];
+        final boolean[] dragging = new boolean[1];
 
         bubble.setOnTouchListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                downX[0] = event.getRawX();
-                downY[0] = event.getRawY();
-                return false;
-            }
-
-            if (event.getAction() == MotionEvent.ACTION_UP) {
-                float dx = event.getRawX() - downX[0];
-                float dy = Math.abs(event.getRawY() - downY[0]);
-
-                if (dx > dp(55) && dy < dp(45)) {
-                    v.animate()
-                            .translationX(dp(18))
-                            .setDuration(70)
-                            .withEndAction(() -> v.animate().translationX(0).setDuration(90).start())
-                            .start();
-                    setReply(d);
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    downX[0] = event.getRawX();
+                    downY[0] = event.getRawY();
+                    replied[0] = false;
+                    dragging[0] = false;
+                    v.getParent().requestDisallowInterceptTouchEvent(true);
                     return true;
-                }
+
+                case MotionEvent.ACTION_MOVE:
+                    float moveDx = event.getRawX() - downX[0];
+                    float moveDy = Math.abs(event.getRawY() - downY[0]);
+
+                    if (moveDx > dp(10) && moveDy < dp(45)) {
+                        dragging[0] = true;
+                        float limited = Math.min(moveDx, dp(75));
+                        v.setTranslationX(limited * 0.45f);
+                    }
+
+                    if (!replied[0] && moveDx > dp(55) && moveDy < dp(45)) {
+                        replied[0] = true;
+                        setReply(d);
+                    }
+                    return true;
+
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.getParent().requestDisallowInterceptTouchEvent(false);
+                    v.animate().translationX(0).setDuration(120).start();
+                    return dragging[0] || replied[0];
             }
 
             return false;
