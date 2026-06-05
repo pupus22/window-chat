@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
@@ -14,6 +15,7 @@ import android.provider.OpenableColumns;
 import android.provider.ContactsContract;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.WindowInsets;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -441,10 +443,10 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout actions = new LinearLayout(this);
         actions.setPadding(dp(8), dp(8), dp(8), dp(8));
         actions.setBackgroundColor(Color.WHITE);
-        Button contacts = button("Kontak");
+
         Button newChat = button("+ Chat");
         Button newGroup = button("+ Grup");
-        actions.addView(contacts, new LinearLayout.LayoutParams(0, dp(48), 1));
+
         actions.addView(newChat, new LinearLayout.LayoutParams(0, dp(48), 1));
         actions.addView(newGroup, new LinearLayout.LayoutParams(0, dp(48), 1));
         root.addView(actions);
@@ -455,7 +457,6 @@ public class MainActivity extends AppCompatActivity {
         recycler.setAdapter(chatsAdapter);
         root.addView(recycler, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
 
-        contacts.setOnClickListener(v -> openContacts());
         newChat.setOnClickListener(v -> showStartPrivateDialog());
         newGroup.setOnClickListener(v -> showCreateGroupDialog());
 
@@ -662,6 +663,7 @@ public class MainActivity extends AppCompatActivity {
         bar.addView(messageInput, new LinearLayout.LayoutParams(0, dp(48), 1));
         bar.addView(send, new LinearLayout.LayoutParams(dp(64), dp(48)));
         root.addView(bar);
+        protectBottomFromNavigationBar(bar, 6);
 
         send.setOnClickListener(v -> sendTextMessage());
         attach.setOnClickListener(v -> showAttachDialog());
@@ -1091,7 +1093,7 @@ public class MainActivity extends AppCompatActivity {
             LinearLayout bubble = new LinearLayout(MainActivity.this);
             bubble.setOrientation(LinearLayout.VERTICAL);
             bubble.setPadding(dp(12), dp(8), dp(12), dp(8));
-            bubble.setBackgroundColor(mine ? BLUE : Color.WHITE);
+            bubble.setBackground(roundedBg(mine ? BLUE : Color.WHITE, 14));
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             bp.gravity = mine ? Gravity.END : Gravity.START;
             bubble.setLayoutParams(bp);
@@ -1130,6 +1132,15 @@ public class MainActivity extends AppCompatActivity {
 
         @Override public int getItemCount() { return items.size(); }
         class Holder extends RecyclerView.ViewHolder { LinearLayout outer; Holder(@NonNull View v) { super(v); outer = (LinearLayout) v; } }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (activeChatId != null) {
+            showHome();
+        } else {
+            super.onBackPressed();
+        }
     }
 
     private boolean isActiveGroup() {
@@ -1247,5 +1258,44 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout.LayoutParams lpMatchWrap() { return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); }
     private void addSpace(LinearLayout parent, int h) { Space s = new Space(this); parent.addView(s, new LinearLayout.LayoutParams(1, dp(h))); }
     private int dp(int v) { return (int) (v * getResources().getDisplayMetrics().density + 0.5f); }
+
+    private GradientDrawable roundedBg(int color, int radiusDp) {
+        GradientDrawable gd = new GradientDrawable();
+        gd.setColor(color);
+        gd.setCornerRadius(dp(radiusDp));
+        return gd;
+    }
+
+    private void protectBottomFromNavigationBar(View view, int extraDp) {
+        final int startLeft = view.getPaddingLeft();
+        final int startTop = view.getPaddingTop();
+        final int startRight = view.getPaddingRight();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+            view.setOnApplyWindowInsetsListener((v, insets) -> {
+                int bottomInset;
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    bottomInset = insets.getInsets(WindowInsets.Type.navigationBars()).bottom;
+                } else {
+                    bottomInset = insets.getSystemWindowInsetBottom();
+                }
+
+                v.setPadding(
+                        startLeft,
+                        startTop,
+                        startRight,
+                        bottomInset + dp(extraDp)
+                );
+
+                return insets;
+            });
+
+            view.requestApplyInsets();
+        } else {
+            view.setPadding(startLeft, startTop, startRight, dp(extraDp));
+        }
+    }
+
     private void toast(String s) { Toast.makeText(this, s, Toast.LENGTH_LONG).show(); }
 }
