@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.content.Context;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
@@ -101,6 +102,11 @@ public class MainActivity extends AppCompatActivity {
     private static final long MAX_IMAGE_BYTES = 5L * 1024L * 1024L;
     private static final long MAX_VIDEO_BYTES = 100L * 1024L * 1024L;
     private static final long MAX_VIDEO_DURATION_MS = 10L * 60L * 1000L;
+    private static final String PREF_NAME = "window_settings";
+    private static final String KEY_FONT_SIZE_MODE = "font_size_mode";
+
+    // 0 = kecil/compact, 1 = normal, 2 = besar
+    private int fontSizeMode = 0;
 
     private FirebaseAuth auth;
     private FirebaseFirestore db;
@@ -136,6 +142,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         getWindow().setStatusBarColor(Color.BLACK);
         getWindow().setNavigationBarColor(Color.BLACK);
+        loadFontSizeMode();
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
         createNotificationChannel();
@@ -177,10 +184,59 @@ public class MainActivity extends AppCompatActivity {
         setContentView(root);
     }
 
+    private void loadFontSizeMode() {
+        fontSizeMode = getSharedPreferences(PREF_NAME, MODE_PRIVATE).getInt(KEY_FONT_SIZE_MODE, 0);
+        if (fontSizeMode < 0 || fontSizeMode > 2) fontSizeMode = 0;
+    }
+
+    private void saveFontSizeMode(int mode) {
+        fontSizeMode = mode;
+        getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                .edit()
+                .putInt(KEY_FONT_SIZE_MODE, fontSizeMode)
+                .apply();
+    }
+
+    private float scaledSp(int sp) {
+        float scale;
+        if (fontSizeMode == 0) scale = 0.86f;
+        else if (fontSizeMode == 2) scale = 1.12f;
+        else scale = 1.0f;
+        return Math.max(9f, sp * scale);
+    }
+
+    private void showFontSizeDialog() {
+        String[] options = {"Kecil / compact", "Normal", "Besar"};
+        new AlertDialog.Builder(this)
+                .setTitle("Ukuran Font")
+                .setSingleChoiceItems(options, fontSizeMode, (dialog, which) -> {
+                    saveFontSizeMode(which);
+                    dialog.dismiss();
+                    toast("Ukuran font: " + options[which]);
+                    refreshAfterFontChanged();
+                })
+                .setNegativeButton("Batal", null)
+                .show();
+    }
+
+    private void refreshAfterFontChanged() {
+        if (activeChatId != null) {
+            String chatId = activeChatId;
+            String title = value(activeChatTitle, "Chat");
+            boolean isGroup = activeChatIsGroup;
+            activeChatIsGroup = isGroup;
+            openChat(chatId, title);
+        } else if (currentUid != null) {
+            showHome();
+        } else {
+            showWelcomeScreen();
+        }
+    }
+
     private TextView tv(String text, int sp, int color, int style) {
         TextView t = new TextView(this);
         t.setText(text);
-        t.setTextSize(sp);
+        t.setTextSize(scaledSp(sp));
         t.setTextColor(color);
         t.setTypeface(Typeface.MONOSPACE, style);
         t.setPadding(dp(12), dp(8), dp(12), dp(8));
@@ -191,7 +247,7 @@ public class MainActivity extends AppCompatActivity {
         EditText e = new EditText(this);
         e.setHint(hint);
         e.setSingleLine(true);
-        e.setTextSize(16);
+        e.setTextSize(scaledSp(16));
         e.setTextColor(TERMINAL_TEXT);
         e.setHintTextColor(TERMINAL_DIM);
         e.setTypeface(Typeface.MONOSPACE);
@@ -204,7 +260,7 @@ public class MainActivity extends AppCompatActivity {
         Button b = new Button(this);
         b.setText(text);
         b.setTextColor(BLUE);
-        b.setTextSize(15);
+        b.setTextSize(scaledSp(15));
         b.setTypeface(Typeface.MONOSPACE, 1);
         b.setBackground(terminalBox(TERMINAL_PANEL_2, 1, BLUE, 6));
         b.setAllCaps(false);
@@ -498,6 +554,7 @@ public class MainActivity extends AppCompatActivity {
         TextView title = tv("Window", 24, BLUE, 1);
         Button profile = new Button(this);
         profile.setText("Saya");
+        profile.setTextSize(scaledSp(13));
         profile.setAllCaps(false);
         profile.setTextColor(BLUE);
         profile.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
@@ -512,9 +569,11 @@ public class MainActivity extends AppCompatActivity {
 
         Button newChat = button("+ Chat");
         Button newGroup = button("+ Grup");
+        Button font = button("Font");
 
         actions.addView(newChat, new LinearLayout.LayoutParams(0, dp(48), 1));
         actions.addView(newGroup, new LinearLayout.LayoutParams(0, dp(48), 1));
+        actions.addView(font, new LinearLayout.LayoutParams(0, dp(48), 1));
         root.addView(actions);
 
         RecyclerView recycler = new RecyclerView(this);
@@ -526,6 +585,7 @@ public class MainActivity extends AppCompatActivity {
 
         newChat.setOnClickListener(v -> showStartPrivateDialog());
         newGroup.setOnClickListener(v -> showCreateGroupDialog());
+        font.setOnClickListener(v -> showFontSizeDialog());
 
         chatsListener = db.collection("chats")
                 .whereArrayContains("members", currentUid)
@@ -561,11 +621,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void showChatOptionsDialog() {
         if (activeChatId == null) return;
-        String[] items = {"Clear chat"};
+        String[] items = {"Clear chat", "Ukuran font"};
         new AlertDialog.Builder(this)
                 .setTitle(value(activeChatTitle, "Chat"))
                 .setItems(items, (dialog, which) -> {
                     if (which == 0) confirmClearCurrentChat();
+                    else if (which == 1) showFontSizeDialog();
                 })
                 .show();
     }
@@ -673,7 +734,7 @@ public class MainActivity extends AppCompatActivity {
                     currentUsername = "";
                     showWelcomeScreen();
                 })
-                .setNeutralButton("Tutup", null)
+                .setNeutralButton("Ukuran Font", (d, w) -> showFontSizeDialog())
                 .show();
     }
 
@@ -828,6 +889,7 @@ public class MainActivity extends AppCompatActivity {
         header.setBackgroundColor(DARK_BLUE);
         Button back = new Button(this);
         back.setText("←");
+        back.setTextSize(scaledSp(18));
         back.setTextColor(BLUE);
         back.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
         LinearLayout titleStack = new LinearLayout(this);
@@ -842,6 +904,7 @@ public class MainActivity extends AppCompatActivity {
         titleStack.addView(typingView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         Button menu = new Button(this);
         menu.setText("⋮");
+        menu.setTextSize(scaledSp(18));
         menu.setAllCaps(false);
         menu.setTextColor(BLUE);
         menu.setBackground(terminalBox(TERMINAL_PANEL, 1, BLUE, 6));
@@ -878,6 +941,7 @@ public class MainActivity extends AppCompatActivity {
         replyPreviewText.setBackground(terminalBox(TERMINAL_PANEL_2, 1, TERMINAL_LINE, 8));
         Button cancelReply = new Button(this);
         cancelReply.setText("×");
+        cancelReply.setTextSize(scaledSp(18));
         cancelReply.setAllCaps(false);
         cancelReply.setTextColor(BLUE);
         cancelReply.setBackgroundColor(Color.TRANSPARENT);
@@ -892,6 +956,7 @@ public class MainActivity extends AppCompatActivity {
         bar.setBackgroundColor(BG);
         Button attach = new Button(this);
         attach.setText("📎");
+        attach.setTextSize(scaledSp(18));
         attach.setAllCaps(false);
         attach.setTextColor(BLUE);
         attach.setTypeface(Typeface.MONOSPACE, 1);
@@ -1145,6 +1210,7 @@ public class MainActivity extends AppCompatActivity {
         header.setBackgroundColor(DARK_BLUE);
         Button back = new Button(this);
         back.setText("←");
+        back.setTextSize(scaledSp(18));
         back.setTextColor(BLUE);
         back.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
         TextView titleView = tv("Kontak Window", 20, BLUE, 1);
