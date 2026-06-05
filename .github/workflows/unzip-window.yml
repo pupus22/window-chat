@@ -44,6 +44,11 @@ jobs:
 
           echo "Mengambil isi dari: $SRC_DIR"
 
+          # Penting:
+          # Jangan ikut extract .github dari ZIP,
+          # karena GitHub Actions tidak boleh membuat workflow baru otomatis.
+          rm -rf "$SRC_DIR/.github"
+
           rsync -a "$SRC_DIR"/ ./
 
           rm -f "$ZIP_FILE"
