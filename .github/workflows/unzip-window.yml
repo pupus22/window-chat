@@ -1,0 +1,64 @@
+name: Unzip Window Project
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unzip project ZIP
+        shell: bash
+        run: |
+          set -e
+
+          ZIP_FILE="$(ls *.zip | head -n 1)"
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "Tidak ada file ZIP di repository."
+            exit 1
+          fi
+
+          echo "ZIP ditemukan: $ZIP_FILE"
+
+          rm -rf /tmp/window_unzip
+          mkdir -p /tmp/window_unzip
+
+          unzip -q "$ZIP_FILE" -d /tmp/window_unzip
+
+          DIR_COUNT="$(find /tmp/window_unzip -mindepth 1 -maxdepth 1 -type d | wc -l)"
+          FILE_COUNT="$(find /tmp/window_unzip -mindepth 1 -maxdepth 1 -type f | wc -l)"
+
+          if [ "$DIR_COUNT" -eq 1 ] && [ "$FILE_COUNT" -eq 0 ]; then
+            SRC_DIR="$(find /tmp/window_unzip -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          else
+            SRC_DIR="/tmp/window_unzip"
+          fi
+
+          echo "Mengambil isi dari: $SRC_DIR"
+
+          rsync -a "$SRC_DIR"/ ./
+
+          rm -f "$ZIP_FILE"
+
+      - name: Commit extracted files
+        shell: bash
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Tidak ada perubahan."
+          else
+            git commit -m "Extract Window project files"
+            git push
+          fi
