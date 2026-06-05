@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
@@ -47,6 +48,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.ItemTouchHelper;
 
 import com.bumptech.glide.Glide;
 import com.google.firebase.Timestamp;
@@ -82,9 +84,15 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainActivity extends AppCompatActivity {
-    private static final int BLUE = Color.rgb(0, 87, 217);
-    private static final int DARK_BLUE = Color.rgb(0, 58, 145);
-    private static final int BG = Color.rgb(244, 246, 250);
+    // Window Terminal Theme
+    private static final int BLUE = Color.rgb(0, 240, 110);          // neon terminal green
+    private static final int DARK_BLUE = Color.rgb(0, 46, 24);       // dark green header
+    private static final int BG = Color.rgb(0, 8, 4);                // near black
+    private static final int TERMINAL_PANEL = Color.rgb(3, 18, 10);
+    private static final int TERMINAL_PANEL_2 = Color.rgb(6, 30, 17);
+    private static final int TERMINAL_LINE = Color.rgb(0, 96, 48);
+    private static final int TERMINAL_TEXT = Color.rgb(185, 255, 205);
+    private static final int TERMINAL_DIM = Color.rgb(88, 158, 104);
     private static final int REQ_PICK_MEDIA = 1001;
     private static final int REQ_CONTACTS = 1002;
     private static final int REQ_TAKE_PHOTO = 1003;
@@ -126,6 +134,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().setStatusBarColor(Color.BLACK);
+        getWindow().setNavigationBarColor(Color.BLACK);
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
         createNotificationChannel();
@@ -172,7 +182,7 @@ public class MainActivity extends AppCompatActivity {
         t.setText(text);
         t.setTextSize(sp);
         t.setTextColor(color);
-        t.setTypeface(null, style);
+        t.setTypeface(Typeface.MONOSPACE, style);
         t.setPadding(dp(12), dp(8), dp(12), dp(8));
         return t;
     }
@@ -182,17 +192,21 @@ public class MainActivity extends AppCompatActivity {
         e.setHint(hint);
         e.setSingleLine(true);
         e.setTextSize(16);
+        e.setTextColor(TERMINAL_TEXT);
+        e.setHintTextColor(TERMINAL_DIM);
+        e.setTypeface(Typeface.MONOSPACE);
         e.setPadding(dp(14), dp(10), dp(14), dp(10));
-        e.setBackgroundColor(Color.WHITE);
+        e.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 8));
         return e;
     }
 
     private Button button(String text) {
         Button b = new Button(this);
         b.setText(text);
-        b.setTextColor(Color.WHITE);
+        b.setTextColor(BLUE);
         b.setTextSize(15);
-        b.setBackgroundColor(BLUE);
+        b.setTypeface(Typeface.MONOSPACE, 1);
+        b.setBackground(terminalBox(TERMINAL_PANEL_2, 1, BLUE, 6));
         b.setAllCaps(false);
         return b;
     }
@@ -201,7 +215,7 @@ public class MainActivity extends AppCompatActivity {
         setRoot();
         root.setGravity(Gravity.CENTER);
         ProgressBar pb = new ProgressBar(this);
-        TextView label = tv(text, 16, Color.DKGRAY, 0);
+        TextView label = tv(text, 16, TERMINAL_DIM, 0);
         label.setGravity(Gravity.CENTER);
         root.addView(pb);
         root.addView(label);
@@ -211,22 +225,22 @@ public class MainActivity extends AppCompatActivity {
         setRoot();
         root.setGravity(Gravity.CENTER);
         root.setPadding(dp(24), dp(24), dp(24), dp(24));
-        root.setBackgroundColor(DARK_BLUE);
+        root.setBackgroundColor(BG);
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.drawable.window_logo);
-        logo.setBackgroundResource(R.drawable.bg_circle_white);
+        logo.setBackground(terminalBox(TERMINAL_PANEL, 1, BLUE, 64));
         logo.setPadding(dp(18), dp(18), dp(18), dp(18));
-        TextView title = tv("Window", 34, Color.WHITE, 1);
+        TextView title = tv("Window", 34, BLUE, 1);
         title.setGravity(Gravity.CENTER);
-        TextView sub = tv("Chat simpel, kontak otomatis tanpa OTP SMS", 14, Color.WHITE, 0);
+        TextView sub = tv("secure terminal chat // no otp sms", 14, TERMINAL_TEXT, 0);
         sub.setGravity(Gravity.CENTER);
         Button register = button("Daftar Akun Baru");
         Button login = button("Masuk Akun Lama");
-        register.setBackgroundColor(Color.WHITE);
+        register.setBackground(terminalBox(TERMINAL_PANEL_2, 1, BLUE, 6));
         register.setTextColor(BLUE);
-        login.setBackgroundColor(Color.rgb(235, 242, 255));
-        login.setTextColor(DARK_BLUE);
+        login.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
+        login.setTextColor(BLUE);
 
         root.addView(logo, new LinearLayout.LayoutParams(dp(112), dp(112)));
         root.addView(title);
@@ -235,7 +249,7 @@ public class MainActivity extends AppCompatActivity {
         root.addView(register, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
         addSpace(root, 10);
         root.addView(login, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
-        root.addView(tv("Pakai username + nomor HP + PIN. Tidak ada biaya SMS.", 13, Color.WHITE, 0));
+        root.addView(tv("> username + phone id + pin // no sms cost", 13, TERMINAL_DIM, 0));
         register.setOnClickListener(v -> showRegisterScreen());
         login.setOnClickListener(v -> showLoginScreen());
     }
@@ -243,9 +257,9 @@ public class MainActivity extends AppCompatActivity {
     private void showRegisterScreen() {
         setRoot();
         root.setPadding(dp(20), dp(30), dp(20), dp(20));
-        TextView title = tv("Daftar Window", 24, Color.BLACK, 1);
+        TextView title = tv("Daftar Window", 24, BLUE, 1);
         title.setGravity(Gravity.CENTER);
-        TextView desc = tv("Buat username, isi nomor HP sebagai ID kontak, dan PIN. Nomor tidak diverifikasi OTP.", 14, Color.DKGRAY, 0);
+        TextView desc = tv("Buat username, isi nomor HP sebagai ID kontak, dan PIN. Nomor tidak diverifikasi OTP.", 14, TERMINAL_DIM, 0);
         desc.setGravity(Gravity.CENTER);
         EditText name = input("Nama tampilan, contoh: Angga");
         EditText username = input("Username, contoh: angga_sby");
@@ -256,8 +270,8 @@ public class MainActivity extends AppCompatActivity {
         pin.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         Button save = button("Daftar");
         Button back = button("Kembali");
-        back.setBackgroundColor(Color.LTGRAY);
-        back.setTextColor(Color.BLACK);
+        back.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
+        back.setTextColor(TERMINAL_TEXT);
 
         root.addView(title);
         root.addView(desc);
@@ -281,9 +295,9 @@ public class MainActivity extends AppCompatActivity {
     private void showLoginScreen() {
         setRoot();
         root.setPadding(dp(20), dp(30), dp(20), dp(20));
-        TextView title = tv("Masuk Window", 24, Color.BLACK, 1);
+        TextView title = tv("Masuk Window", 24, BLUE, 1);
         title.setGravity(Gravity.CENTER);
-        TextView desc = tv("Masuk pakai username dan PIN yang sudah dibuat.", 14, Color.DKGRAY, 0);
+        TextView desc = tv("Masuk pakai username dan PIN yang sudah dibuat.", 14, TERMINAL_DIM, 0);
         desc.setGravity(Gravity.CENTER);
         EditText username = input("Username");
         username.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
@@ -291,8 +305,8 @@ public class MainActivity extends AppCompatActivity {
         pin.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         Button login = button("Masuk");
         Button back = button("Kembali");
-        back.setBackgroundColor(Color.LTGRAY);
-        back.setTextColor(Color.BLACK);
+        back.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
+        back.setTextColor(TERMINAL_TEXT);
 
         root.addView(title);
         root.addView(desc);
@@ -384,16 +398,16 @@ public class MainActivity extends AppCompatActivity {
     private void showNameScreen() {
         setRoot();
         root.setPadding(dp(20), dp(30), dp(20), dp(20));
-        TextView title = tv("Edit Nama", 24, Color.BLACK, 1);
+        TextView title = tv("Edit Nama", 24, BLUE, 1);
         title.setGravity(Gravity.CENTER);
         EditText name = input("Nama tampilan");
         name.setText(currentName);
         Button save = button("Simpan");
         Button cancel = button("Batal");
-        cancel.setBackgroundColor(Color.LTGRAY);
-        cancel.setTextColor(Color.BLACK);
+        cancel.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
+        cancel.setTextColor(TERMINAL_TEXT);
         root.addView(title);
-        root.addView(tv("Nama ini akan terlihat di chat dan grup.", 14, Color.DKGRAY, 0));
+        root.addView(tv("Nama ini akan terlihat di chat dan grup.", 14, TERMINAL_DIM, 0));
         addSpace(root, 18);
         root.addView(name, lpMatchWrap());
         addSpace(root, 12);
@@ -480,12 +494,13 @@ public class MainActivity extends AppCompatActivity {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(dp(14), dp(10), dp(10), dp(8));
-        header.setBackgroundColor(BLUE);
-        TextView title = tv("Window", 24, Color.WHITE, 1);
+        header.setBackgroundColor(DARK_BLUE);
+        TextView title = tv("Window", 24, BLUE, 1);
         Button profile = new Button(this);
         profile.setText("Saya");
         profile.setAllCaps(false);
         profile.setTextColor(BLUE);
+        profile.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
         profile.setOnClickListener(v -> showProfileDialog());
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         header.addView(profile);
@@ -493,7 +508,7 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout actions = new LinearLayout(this);
         actions.setPadding(dp(8), dp(8), dp(8), dp(8));
-        actions.setBackgroundColor(Color.WHITE);
+        actions.setBackgroundColor(BG);
 
         Button newChat = button("+ Chat");
         Button newGroup = button("+ Grup");
@@ -507,6 +522,7 @@ public class MainActivity extends AppCompatActivity {
         chatsAdapter = new ChatsAdapter();
         recycler.setAdapter(chatsAdapter);
         root.addView(recycler, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        attachSwipeDeleteToChatList(recycler);
 
         newChat.setOnClickListener(v -> showStartPrivateDialog());
         newGroup.setOnClickListener(v -> showCreateGroupDialog());
@@ -521,6 +537,128 @@ public class MainActivity extends AppCompatActivity {
                     List<DocumentSnapshot> list = snap == null ? new ArrayList<>() : snap.getDocuments();
                     chatsAdapter.submit(list);
                 });
+    }
+
+
+    private void attachSwipeDeleteToChatList(RecyclerView recycler) {
+        ItemTouchHelper helper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT) {
+            @Override
+            public boolean onMove(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder from, @NonNull RecyclerView.ViewHolder to) {
+                return false;
+            }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder holder, int direction) {
+                int pos = holder.getAdapterPosition();
+                if (chatsAdapter == null || pos < 0 || pos >= chatsAdapter.getItemCount()) return;
+                DocumentSnapshot d = chatsAdapter.getItem(pos);
+                chatsAdapter.notifyItemChanged(pos); // balikin row supaya tidak hilang sebelum user konfirmasi
+                confirmDeleteChatFromHome(d);
+            }
+        });
+        helper.attachToRecyclerView(recycler);
+    }
+
+    private void showChatOptionsDialog() {
+        if (activeChatId == null) return;
+        String[] items = {"Clear chat"};
+        new AlertDialog.Builder(this)
+                .setTitle(value(activeChatTitle, "Chat"))
+                .setItems(items, (dialog, which) -> {
+                    if (which == 0) confirmClearCurrentChat();
+                })
+                .show();
+    }
+
+    private void confirmClearCurrentChat() {
+        new AlertDialog.Builder(this)
+                .setTitle("Clear chat?")
+                .setMessage("Semua riwayat pesan di chat ini akan dihapus permanen dari Firebase untuk semua member. Chat room tetap ada, tapi pesannya kosong.")
+                .setPositiveButton("Clear", (d, w) -> clearCurrentChatHistory())
+                .setNegativeButton("Batal", null)
+                .show();
+    }
+
+    private void clearCurrentChatHistory() {
+        if (activeChatId == null) return;
+        String chatId = activeChatId;
+        String title = value(activeChatTitle, "Chat");
+        boolean isGroup = activeChatIsGroup;
+        showLoading("Menghapus riwayat chat...");
+        deleteAllMessagesInChat(chatId, () -> {
+            Map<String, Object> update = new HashMap<>();
+            update.put("lastMessage", "");
+            update.put("lastSenderId", "");
+            update.put("updatedAt", FieldValue.serverTimestamp());
+            db.collection("chats").document(chatId).set(update, SetOptions.merge())
+                    .addOnSuccessListener(x -> {
+                        toast("Riwayat chat sudah dihapus");
+                        activeChatIsGroup = isGroup;
+                        openChat(chatId, title);
+                    })
+                    .addOnFailureListener(e -> {
+                        openChat(chatId, title);
+                        toast("Gagal update chat: " + e.getMessage());
+                    });
+        }, e -> {
+            activeChatIsGroup = isGroup;
+            openChat(chatId, title);
+            toast("Gagal clear chat: " + e.getMessage());
+        });
+    }
+
+    private void confirmDeleteChatFromHome(DocumentSnapshot d) {
+        String title = chatTitle(d);
+        String chatId = d.getId();
+        new AlertDialog.Builder(this)
+                .setTitle("Hapus chat?")
+                .setMessage("Chat \"" + title + "\" akan dihapus permanen dari halaman utama dan dari Firebase, termasuk semua pesan di dalamnya. Ini juga hilang untuk member lain.")
+                .setPositiveButton("Hapus", (dialog, which) -> deleteWholeChat(chatId))
+                .setNegativeButton("Batal", null)
+                .show();
+    }
+
+    private void deleteWholeChat(String chatId) {
+        showLoading("Menghapus chat...");
+        deleteAllMessagesInChat(chatId, () -> {
+            db.collection("chats").document(chatId).delete()
+                    .addOnSuccessListener(x -> {
+                        toast("Chat sudah dihapus");
+                        showHome();
+                    })
+                    .addOnFailureListener(e -> {
+                        showHome();
+                        toast("Gagal hapus chat: " + e.getMessage());
+                    });
+        }, e -> {
+            showHome();
+            toast("Gagal hapus pesan: " + e.getMessage());
+        });
+    }
+
+    private interface DoneCallback { void onDone(); }
+    private interface ErrorCallback { void onError(Exception e); }
+
+    private void deleteAllMessagesInChat(String chatId, DoneCallback done, ErrorCallback fail) {
+        db.collection("chats").document(chatId).collection("messages")
+                .limit(300)
+                .get()
+                .addOnSuccessListener(snap -> {
+                    if (snap == null || snap.isEmpty()) {
+                        done.onDone();
+                        return;
+                    }
+
+                    com.google.firebase.firestore.WriteBatch batch = db.batch();
+                    for (DocumentSnapshot doc : snap.getDocuments()) {
+                        batch.delete(doc.getReference());
+                    }
+
+                    batch.commit()
+                            .addOnSuccessListener(x -> deleteAllMessagesInChat(chatId, done, fail))
+                            .addOnFailureListener(fail::onError);
+                })
+                .addOnFailureListener(fail::onError);
     }
 
     private void showProfileDialog() {
@@ -687,24 +825,33 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(dp(8), dp(6), dp(8), dp(6));
-        header.setBackgroundColor(BLUE);
+        header.setBackgroundColor(DARK_BLUE);
         Button back = new Button(this);
         back.setText("←");
         back.setTextColor(BLUE);
+        back.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
         LinearLayout titleStack = new LinearLayout(this);
         titleStack.setOrientation(LinearLayout.VERTICAL);
         titleStack.setGravity(Gravity.CENTER_VERTICAL);
-        TextView titleView = tv(title, 19, Color.WHITE, 1);
+        TextView titleView = tv(title, 19, BLUE, 1);
         titleView.setPadding(dp(8), 0, dp(8), 0);
-        typingView = tv("", 12, Color.rgb(210, 230, 255), 0);
+        typingView = tv("", 12, BLUE, 0);
         typingView.setPadding(dp(8), 0, dp(8), 0);
         typingView.setVisibility(View.GONE);
         titleStack.addView(titleView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         titleStack.addView(typingView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        Button menu = new Button(this);
+        menu.setText("⋮");
+        menu.setAllCaps(false);
+        menu.setTextColor(BLUE);
+        menu.setBackground(terminalBox(TERMINAL_PANEL, 1, BLUE, 6));
+
         header.addView(back, new LinearLayout.LayoutParams(dp(56), dp(48)));
         header.addView(titleStack, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        header.addView(menu, new LinearLayout.LayoutParams(dp(52), dp(48)));
         root.addView(header);
         back.setOnClickListener(v -> showHome());
+        menu.setOnClickListener(v -> showChatOptionsDialog());
         listenTypingStatus();
 
         RecyclerView recycler = new RecyclerView(this);
@@ -717,22 +864,22 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout inputArea = new LinearLayout(this);
         inputArea.setOrientation(LinearLayout.VERTICAL);
-        inputArea.setBackgroundColor(Color.WHITE);
+        inputArea.setBackgroundColor(BG);
 
         replyPreviewBar = new LinearLayout(this);
         replyPreviewBar.setOrientation(LinearLayout.HORIZONTAL);
         replyPreviewBar.setGravity(Gravity.CENTER_VERTICAL);
         replyPreviewBar.setPadding(dp(10), dp(6), dp(8), dp(6));
-        replyPreviewBar.setBackgroundColor(Color.WHITE);
+        replyPreviewBar.setBackgroundColor(BG);
         replyPreviewBar.setVisibility(View.GONE);
 
-        replyPreviewText = tv("", 13, Color.DKGRAY, 0);
+        replyPreviewText = tv("", 13, TERMINAL_DIM, 0);
         replyPreviewText.setPadding(dp(10), dp(6), dp(10), dp(6));
-        replyPreviewText.setBackground(roundedBg(Color.rgb(235, 242, 255), 12));
+        replyPreviewText.setBackground(terminalBox(TERMINAL_PANEL_2, 1, TERMINAL_LINE, 8));
         Button cancelReply = new Button(this);
         cancelReply.setText("×");
         cancelReply.setAllCaps(false);
-        cancelReply.setTextColor(Color.DKGRAY);
+        cancelReply.setTextColor(BLUE);
         cancelReply.setBackgroundColor(Color.TRANSPARENT);
         cancelReply.setOnClickListener(v -> clearReply());
         replyPreviewBar.addView(replyPreviewText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -742,10 +889,13 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout bar = new LinearLayout(this);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setPadding(dp(8), dp(6), dp(8), dp(6));
-        bar.setBackgroundColor(Color.WHITE);
+        bar.setBackgroundColor(BG);
         Button attach = new Button(this);
         attach.setText("📎");
         attach.setAllCaps(false);
+        attach.setTextColor(BLUE);
+        attach.setTypeface(Typeface.MONOSPACE, 1);
+        attach.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
         messageInput = input("Ketik pesan...");
         messageInput.setSingleLine(false);
         messageInput.setMinLines(1);
@@ -992,18 +1142,19 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(dp(8), dp(6), dp(8), dp(6));
-        header.setBackgroundColor(BLUE);
+        header.setBackgroundColor(DARK_BLUE);
         Button back = new Button(this);
         back.setText("←");
         back.setTextColor(BLUE);
-        TextView titleView = tv("Kontak Window", 20, Color.WHITE, 1);
+        back.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
+        TextView titleView = tv("Kontak Window", 20, BLUE, 1);
         header.addView(back, new LinearLayout.LayoutParams(dp(56), dp(48)));
         header.addView(titleView, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         root.addView(header);
         back.setOnClickListener(v -> showHome());
 
         if (found.isEmpty()) {
-            TextView empty = tv("Belum ada kontak HP Mas yang terdaftar di Window.\n\nTeman harus daftar dulu dengan nomor HP yang sama seperti di kontak Mas.", 15, Color.DKGRAY, 0);
+            TextView empty = tv("Belum ada kontak HP Mas yang terdaftar di Window.\n\nTeman harus daftar dulu dengan nomor HP yang sama seperti di kontak Mas.", 15, TERMINAL_DIM, 0);
             empty.setGravity(Gravity.CENTER);
             root.addView(empty, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
             return;
@@ -1254,10 +1405,10 @@ public class MainActivity extends AppCompatActivity {
             LinearLayout row = new LinearLayout(parent.getContext());
             row.setOrientation(LinearLayout.VERTICAL);
             row.setPadding(dp(16), dp(10), dp(16), dp(10));
-            row.setBackgroundColor(Color.WHITE);
+            row.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
             row.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            TextView name = tv("", 17, Color.BLACK, 1);
-            TextView sub = tv("", 14, Color.DKGRAY, 0);
+            TextView name = tv("", 17, TERMINAL_TEXT, 1);
+            TextView sub = tv("", 14, TERMINAL_DIM, 0);
             row.addView(name);
             row.addView(sub);
             return new Holder(row, name, sub);
@@ -1281,6 +1432,10 @@ public class MainActivity extends AppCompatActivity {
     private class ChatsAdapter extends RecyclerView.Adapter<ChatsAdapter.Holder> {
         private final List<DocumentSnapshot> items = new ArrayList<>();
 
+        DocumentSnapshot getItem(int position) {
+            return items.get(position);
+        }
+
         void submit(List<DocumentSnapshot> docs) {
             items.clear();
             items.addAll(docs);
@@ -1301,10 +1456,10 @@ public class MainActivity extends AppCompatActivity {
             LinearLayout row = new LinearLayout(parent.getContext());
             row.setOrientation(LinearLayout.VERTICAL);
             row.setPadding(dp(16), dp(10), dp(16), dp(10));
-            row.setBackgroundColor(Color.WHITE);
+            row.setBackground(terminalBox(TERMINAL_PANEL, 1, TERMINAL_LINE, 6));
             row.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            TextView name = tv("", 17, Color.BLACK, 1);
-            TextView last = tv("", 14, Color.DKGRAY, 0);
+            TextView name = tv("", 17, TERMINAL_TEXT, 1);
+            TextView last = tv("", 14, TERMINAL_DIM, 0);
             row.addView(name);
             row.addView(last);
             return new Holder(row, name, last);
@@ -1356,7 +1511,7 @@ public class MainActivity extends AppCompatActivity {
             LinearLayout bubble = new LinearLayout(MainActivity.this);
             bubble.setOrientation(LinearLayout.VERTICAL);
             bubble.setPadding(dp(12), dp(8), dp(12), dp(8));
-            bubble.setBackground(roundedBg(mine ? BLUE : Color.WHITE, 14));
+            bubble.setBackground(terminalBox(mine ? DARK_BLUE : TERMINAL_PANEL_2, 1, mine ? BLUE : TERMINAL_LINE, 8));
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             bp.gravity = mine ? Gravity.END : Gravity.START;
             bubble.setLayoutParams(bp);
@@ -1374,11 +1529,11 @@ public class MainActivity extends AppCompatActivity {
                 LinearLayout quoted = new LinearLayout(MainActivity.this);
                 quoted.setOrientation(LinearLayout.VERTICAL);
                 quoted.setPadding(dp(8), dp(5), dp(8), dp(5));
-                quoted.setBackground(roundedBg(mine ? DARK_BLUE : Color.rgb(235, 238, 242), 10));
+                quoted.setBackground(terminalBox(mine ? TERMINAL_PANEL : BG, 1, TERMINAL_LINE, 6));
 
-                TextView qSender = tv(value(replySender, "Pesan"), 11, mine ? Color.WHITE : BLUE, 1);
+                TextView qSender = tv(value(replySender, "Pesan"), 11, BLUE, 1);
                 qSender.setPadding(0, 0, 0, 0);
-                TextView qBody = tv(shortText(replyText, 70), 12, mine ? Color.WHITE : Color.DKGRAY, 0);
+                TextView qBody = tv(shortText(replyText, 70), 12, TERMINAL_DIM, 0);
                 qBody.setPadding(0, dp(1), 0, 0);
 
                 quoted.addView(qSender);
@@ -1400,16 +1555,16 @@ public class MainActivity extends AppCompatActivity {
             } else if ("video".equals(type) && url != null) {
                 TextView video = tv("▶  Preview Video\nTap untuk putar", 16, Color.WHITE, 1);
                 video.setGravity(Gravity.CENTER);
-                video.setBackgroundColor(Color.rgb(20, 20, 20));
+                video.setBackground(terminalBox(Color.rgb(0, 16, 8), 1, TERMINAL_LINE, 6));
                 bubble.addView(video, new LinearLayout.LayoutParams(dp(220), dp(150)));
                 video.setOnClickListener(v -> openMedia(url, "video"));
             } else {
-                TextView body = tv(text, 16, mine ? Color.WHITE : Color.BLACK, 0);
+                TextView body = tv(text, 16, TERMINAL_TEXT, 0);
                 body.setPadding(0, 0, 0, 0);
                 bubble.addView(body);
             }
 
-            TextView meta = tv("", 11, mine ? Color.WHITE : Color.GRAY, 0);
+            TextView meta = tv("", 11, TERMINAL_DIM, 0);
             meta.setText(statusSpannable(d, mine));
             meta.setGravity(Gravity.END);
             meta.setPadding(0, dp(4), 0, 0);
@@ -1510,7 +1665,7 @@ public class MainActivity extends AppCompatActivity {
 
         int checkStart = full.indexOf("✓✓");
         if (checkStart >= 0) {
-            int checkColor = isRead ? Color.rgb(0, 100, 50) : Color.WHITE;
+            int checkColor = isRead ? Color.rgb(0, 170, 80) : TERMINAL_TEXT;
             span.setSpan(
                     new ForegroundColorSpan(checkColor),
                     checkStart,
@@ -1620,6 +1775,14 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout.LayoutParams lpMatchWrap() { return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); }
     private void addSpace(LinearLayout parent, int h) { Space s = new Space(this); parent.addView(s, new LinearLayout.LayoutParams(1, dp(h))); }
     private int dp(int v) { return (int) (v * getResources().getDisplayMetrics().density + 0.5f); }
+
+    private GradientDrawable terminalBox(int color, int strokeDp, int strokeColor, int radiusDp) {
+        GradientDrawable gd = new GradientDrawable();
+        gd.setColor(color);
+        gd.setCornerRadius(dp(radiusDp));
+        gd.setStroke(dp(strokeDp), strokeColor);
+        return gd;
+    }
 
     private GradientDrawable roundedBg(int color, int radiusDp) {
         GradientDrawable gd = new GradientDrawable();
