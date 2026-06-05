@@ -24,10 +24,50 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
+      - name: Show project files
+        run: |
+          echo "=== ROOT ==="
+          ls -la
+          echo "=== APP ==="
+          ls -la app || true
+          echo "=== VALUES ==="
+          ls -la app/src/main/res/values || true
+          echo "=== STRINGS XML ==="
+          cat app/src/main/res/values/strings.xml || true
+
       - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+        id: build_debug
+        shell: bash
+        run: |
+          set +e
+          gradle :app:assembleDebug --stacktrace --info 2>&1 | tee build-log.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          echo "## Ringkasan Build Window APK" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "❌ Build gagal." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Cari error utama di bawah ini:" >> $GITHUB_STEP_SUMMARY
+            echo '```text' >> $GITHUB_STEP_SUMMARY
+            grep -n -i -A 25 -B 8 "what went wrong\|execution failed\|error:\|failed\|exception\|cannot find symbol\|unclosed string literal\|manifest merger" build-log.txt | head -n 220 >> $GITHUB_STEP_SUMMARY || true
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Build berhasil." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          exit $EXIT_CODE
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Window-build-log
+          path: build-log.txt
 
       - name: Upload APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Window-debug-apk
