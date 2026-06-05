@@ -11,11 +11,16 @@ import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.provider.ContactsContract;
 import android.text.InputType;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.WindowInsets;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -86,9 +91,19 @@ public class MainActivity extends AppCompatActivity {
     private boolean activeChatIsGroup = false;
     private ListenerRegistration chatsListener;
     private ListenerRegistration messagesListener;
+    private ListenerRegistration chatStatusListener;
     private ChatsAdapter chatsAdapter;
     private MessagesAdapter messagesAdapter;
     private EditText messageInput;
+    private LinearLayout replyPreviewBar;
+    private TextView replyPreviewText;
+    private String replyingToMessageId;
+    private String replyingToSenderName;
+    private String replyingToText;
+    private TextView typingView;
+    private final Handler typingHandler = new Handler(Looper.getMainLooper());
+    private Runnable typingStopRunnable;
+    private boolean lastTypingSent = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -419,10 +434,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showHome() {
+        if (activeChatId != null) setTyping(false);
         if (messagesListener != null) messagesListener.remove();
         if (chatsListener != null) chatsListener.remove();
+        if (chatStatusListener != null) chatStatusListener.remove();
+        chatStatusListener = null;
         activeChatId = null;
         activeChatIsGroup = false;
+        clearReplyStateOnly();
         setRoot();
 
         LinearLayout header = new LinearLayout(this);
@@ -623,10 +642,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openChat(String chatId, String title) {
+        if (activeChatId != null) setTyping(false);
         if (chatsListener != null) chatsListener.remove();
         if (messagesListener != null) messagesListener.remove();
+        if (chatStatusListener != null) chatStatusListener.remove();
+        chatStatusListener = null;
         activeChatId = chatId;
         activeChatTitle = title;
+        clearReplyStateOnly();
         setRoot();
 
         LinearLayout header = new LinearLayout(this);
@@ -636,11 +659,21 @@ public class MainActivity extends AppCompatActivity {
         Button back = new Button(this);
         back.setText("←");
         back.setTextColor(BLUE);
-        TextView titleView = tv(title, 20, Color.WHITE, 1);
+        LinearLayout titleStack = new LinearLayout(this);
+        titleStack.setOrientation(LinearLayout.VERTICAL);
+        titleStack.setGravity(Gravity.CENTER_VERTICAL);
+        TextView titleView = tv(title, 19, Color.WHITE, 1);
+        titleView.setPadding(dp(8), 0, dp(8), 0);
+        typingView = tv("", 12, Color.rgb(210, 230, 255), 0);
+        typingView.setPadding(dp(8), 0, dp(8), 0);
+        typingView.setVisibility(View.GONE);
+        titleStack.addView(titleView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        titleStack.addView(typingView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         header.addView(back, new LinearLayout.LayoutParams(dp(56), dp(48)));
-        header.addView(titleView, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        header.addView(titleStack, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         root.addView(header);
         back.setOnClickListener(v -> showHome());
+        listenTypingStatus();
 
         RecyclerView recycler = new RecyclerView(this);
         LinearLayoutManager lm = new LinearLayoutManager(this);
@@ -650,6 +683,30 @@ public class MainActivity extends AppCompatActivity {
         recycler.setAdapter(messagesAdapter);
         root.addView(recycler, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
 
+        LinearLayout inputArea = new LinearLayout(this);
+        inputArea.setOrientation(LinearLayout.VERTICAL);
+        inputArea.setBackgroundColor(Color.WHITE);
+
+        replyPreviewBar = new LinearLayout(this);
+        replyPreviewBar.setOrientation(LinearLayout.HORIZONTAL);
+        replyPreviewBar.setGravity(Gravity.CENTER_VERTICAL);
+        replyPreviewBar.setPadding(dp(10), dp(6), dp(8), dp(6));
+        replyPreviewBar.setBackgroundColor(Color.WHITE);
+        replyPreviewBar.setVisibility(View.GONE);
+
+        replyPreviewText = tv("", 13, Color.DKGRAY, 0);
+        replyPreviewText.setPadding(dp(10), dp(6), dp(10), dp(6));
+        replyPreviewText.setBackground(roundedBg(Color.rgb(235, 242, 255), 12));
+        Button cancelReply = new Button(this);
+        cancelReply.setText("×");
+        cancelReply.setAllCaps(false);
+        cancelReply.setTextColor(Color.DKGRAY);
+        cancelReply.setBackgroundColor(Color.TRANSPARENT);
+        cancelReply.setOnClickListener(v -> clearReply());
+        replyPreviewBar.addView(replyPreviewText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        replyPreviewBar.addView(cancelReply, new LinearLayout.LayoutParams(dp(48), dp(44)));
+        inputArea.addView(replyPreviewBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         LinearLayout bar = new LinearLayout(this);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setPadding(dp(8), dp(6), dp(8), dp(6));
@@ -658,12 +715,20 @@ public class MainActivity extends AppCompatActivity {
         attach.setText("📎");
         attach.setAllCaps(false);
         messageInput = input("Ketik pesan...");
+        messageInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence value, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence value, int start, int before, int count) {
+                handleTypingChanged(value != null && value.toString().trim().length() > 0);
+            }
+            @Override public void afterTextChanged(Editable editable) {}
+        });
         Button send = button("➤");
         bar.addView(attach, new LinearLayout.LayoutParams(dp(56), dp(48)));
         bar.addView(messageInput, new LinearLayout.LayoutParams(0, dp(48), 1));
         bar.addView(send, new LinearLayout.LayoutParams(dp(64), dp(48)));
-        root.addView(bar);
-        protectBottomFromNavigationBar(bar, 6);
+        inputArea.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        root.addView(inputArea);
+        protectBottomFromNavigationBar(inputArea, 6);
 
         send.setOnClickListener(v -> sendTextMessage());
         attach.setOnClickListener(v -> showAttachDialog());
@@ -682,6 +747,51 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
+    @SuppressWarnings("unchecked")
+    private void listenTypingStatus() {
+        if (activeChatId == null || currentUid == null) return;
+        if (chatStatusListener != null) chatStatusListener.remove();
+        chatStatusListener = db.collection("chats").document(activeChatId).addSnapshotListener((snap, e) -> {
+            if (typingView == null || snap == null || !snap.exists()) return;
+            Map<String, Object> typing = (Map<String, Object>) snap.get("typing");
+            boolean otherTyping = false;
+            if (typing != null) {
+                for (String uid : typing.keySet()) {
+                    Object val = typing.get(uid);
+                    if (!uid.equals(currentUid) && Boolean.TRUE.equals(val)) {
+                        otherTyping = true;
+                        break;
+                    }
+                }
+            }
+            typingView.setText(otherTyping ? "typing..." : "");
+            typingView.setVisibility(otherTyping ? View.VISIBLE : View.GONE);
+        });
+    }
+
+    private void handleTypingChanged(boolean hasText) {
+        if (activeChatId == null || currentUid == null) return;
+        if (hasText) {
+            if (!lastTypingSent) setTyping(true);
+            if (typingStopRunnable != null) typingHandler.removeCallbacks(typingStopRunnable);
+            typingStopRunnable = () -> setTyping(false);
+            typingHandler.postDelayed(typingStopRunnable, 2500);
+        } else {
+            if (typingStopRunnable != null) typingHandler.removeCallbacks(typingStopRunnable);
+            setTyping(false);
+        }
+    }
+
+    private void setTyping(boolean typing) {
+        if (activeChatId == null || currentUid == null) return;
+        if (lastTypingSent == typing) return;
+        lastTypingSent = typing;
+        Map<String, Object> typingMap = new HashMap<>();
+        typingMap.put(currentUid, typing);
+        db.collection("chats").document(activeChatId)
+                .set(Collections.singletonMap("typing", typingMap), SetOptions.merge());
+    }
+
     private void markMessagesRead(List<DocumentSnapshot> docs) {
         for (DocumentSnapshot d : docs) {
             String sender = d.getString("senderId");
@@ -698,7 +808,47 @@ public class MainActivity extends AppCompatActivity {
         String text = messageInput.getText().toString().trim();
         if (text.isEmpty() || activeChatId == null) return;
         messageInput.setText("");
+        setTyping(false);
         saveMessage("text", text, null, null, 0L);
+    }
+
+    private void setReply(DocumentSnapshot d) {
+        replyingToMessageId = d.getId();
+        replyingToSenderName = value(d.getString("senderName"), "Pesan");
+        replyingToText = quotePreviewText(d);
+        updateReplyPreview();
+        if (messageInput != null) {
+            messageInput.requestFocus();
+        }
+    }
+
+    private void clearReply() {
+        clearReplyStateOnly();
+        updateReplyPreview();
+    }
+
+    private void clearReplyStateOnly() {
+        replyingToMessageId = null;
+        replyingToSenderName = null;
+        replyingToText = null;
+    }
+
+    private void updateReplyPreview() {
+        if (replyPreviewBar == null || replyPreviewText == null) return;
+        if (replyingToMessageId == null || replyingToMessageId.trim().isEmpty()) {
+            replyPreviewBar.setVisibility(View.GONE);
+            replyPreviewText.setText("");
+        } else {
+            replyPreviewText.setText("Membalas " + value(replyingToSenderName, "Pesan") + "\n" + value(replyingToText, "Pesan"));
+            replyPreviewBar.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private String quotePreviewText(DocumentSnapshot d) {
+        String type = value(d.getString("type"), "text");
+        if ("image".equals(type)) return "📷 Foto";
+        if ("video".equals(type)) return "🎥 Video";
+        return shortText(value(d.getString("text"), "Pesan"), 90);
     }
 
     private void showAttachDialog() {
@@ -943,6 +1093,11 @@ public class MainActivity extends AppCompatActivity {
         msg.put("mediaUrl", mediaUrl);
         msg.put("fileName", fileName);
         msg.put("size", size);
+        if (replyingToMessageId != null && !replyingToMessageId.trim().isEmpty()) {
+            msg.put("replyToMessageId", replyingToMessageId);
+            msg.put("replyToSenderName", value(replyingToSenderName, "Pesan"));
+            msg.put("replyToText", value(replyingToText, "Pesan"));
+        }
         msg.put("createdAt", FieldValue.serverTimestamp());
         msg.put("deliveredTo", initial);
         msg.put("readBy", initial);
@@ -954,6 +1109,7 @@ public class MainActivity extends AppCompatActivity {
             update.put("lastSenderId", currentUid);
             update.put("updatedAt", FieldValue.serverTimestamp());
             chatRef.set(update, SetOptions.merge());
+            clearReply();
         }).addOnFailureListener(e -> toast("Gagal kirim: " + e.getMessage()));
     }
 
@@ -1105,6 +1261,29 @@ public class MainActivity extends AppCompatActivity {
                 bubble.addView(sender);
             }
 
+            String replyText = value(d.getString("replyToText"), "");
+            String replySender = value(d.getString("replyToSenderName"), "");
+            if (!replyText.isEmpty()) {
+                LinearLayout quoted = new LinearLayout(MainActivity.this);
+                quoted.setOrientation(LinearLayout.VERTICAL);
+                quoted.setPadding(dp(8), dp(5), dp(8), dp(5));
+                quoted.setBackground(roundedBg(mine ? DARK_BLUE : Color.rgb(235, 238, 242), 10));
+
+                TextView qSender = tv(value(replySender, "Pesan"), 11, mine ? Color.WHITE : BLUE, 1);
+                qSender.setPadding(0, 0, 0, 0);
+                TextView qBody = tv(shortText(replyText, 70), 12, mine ? Color.WHITE : Color.DKGRAY, 0);
+                qBody.setPadding(0, dp(1), 0, 0);
+
+                quoted.addView(qSender);
+                quoted.addView(qBody);
+
+                LinearLayout.LayoutParams qp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                qp.setMargins(0, 0, 0, dp(6));
+                bubble.addView(quoted, qp);
+            }
+
+            attachSwipeToReply(bubble, d);
+
             if ("image".equals(type) && url != null) {
                 ImageView img = new ImageView(MainActivity.this);
                 img.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -1147,6 +1326,36 @@ public class MainActivity extends AppCompatActivity {
         return activeChatIsGroup;
     }
 
+    private void attachSwipeToReply(View bubble, DocumentSnapshot d) {
+        final float[] downX = new float[1];
+        final float[] downY = new float[1];
+
+        bubble.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                downX[0] = event.getRawX();
+                downY[0] = event.getRawY();
+                return false;
+            }
+
+            if (event.getAction() == MotionEvent.ACTION_UP) {
+                float dx = event.getRawX() - downX[0];
+                float dy = Math.abs(event.getRawY() - downY[0]);
+
+                if (dx > dp(55) && dy < dp(45)) {
+                    v.animate()
+                            .translationX(dp(18))
+                            .setDuration(70)
+                            .withEndAction(() -> v.animate().translationX(0).setDuration(90).start())
+                            .start();
+                    setReply(d);
+                    return true;
+                }
+            }
+
+            return false;
+        });
+    }
+
     @SuppressWarnings("unchecked")
     private String chatTitle(DocumentSnapshot d) {
         String type = value(d.getString("type"), "private");
@@ -1167,9 +1376,23 @@ public class MainActivity extends AppCompatActivity {
         if (!mine) return time;
         List<String> readBy = (List<String>) d.get("readBy");
         List<String> deliveredTo = (List<String>) d.get("deliveredTo");
-        if (readBy != null && readBy.size() > 1) return time + "  ✓✓ biru";
+        if (readBy != null && readBy.size() > 1) return time + "  ✓✓";
         if (deliveredTo != null && deliveredTo.size() > 1) return time + "  ✓✓";
         return time + "  ✓";
+    }
+
+    @SuppressWarnings("unchecked")
+    private int statusColor(DocumentSnapshot d, boolean mine) {
+        if (!mine) return Color.GRAY;
+        List<String> readBy = (List<String>) d.get("readBy");
+        if (readBy != null && readBy.size() > 1) return Color.rgb(0, 100, 50);
+        return Color.WHITE;
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        setTyping(false);
     }
 
     private String privateChatId(String a, String b) {
@@ -1252,6 +1475,12 @@ public class MainActivity extends AppCompatActivity {
         if (email == null) return "";
         int at = email.indexOf('@');
         return at > 0 ? email.substring(0, at) : "";
+    }
+
+    private String shortText(String text, int max) {
+        String v = value(text, "").replace("\n", " ").trim();
+        if (v.length() <= max) return v;
+        return v.substring(0, Math.max(0, max - 3)) + "...";
     }
 
     private String value(String v, String fallback) { return v == null || v.trim().isEmpty() ? fallback : v; }
