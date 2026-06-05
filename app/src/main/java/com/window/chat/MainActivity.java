@@ -1,6 +1,9 @@
 package com.window.chat;
 
 import android.Manifest;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.content.Context;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -16,6 +19,9 @@ import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.provider.ContactsContract;
 import android.text.InputType;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
@@ -110,6 +116,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
+        createNotificationChannel();
         askNotificationPermission();
         showLoading("Membuka Window...");
 
@@ -119,6 +126,19 @@ public class MainActivity extends AppCompatActivity {
         } else {
             currentUid = user.getUid();
             loadProfileThenHome();
+        }
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            NotificationChannel channel = new NotificationChannel(
+                    getString(R.string.default_notification_channel_id),
+                    "Pesan Window",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Notifikasi pesan masuk Window");
+            manager.createNotificationChannel(channel);
         }
     }
 
@@ -1302,7 +1322,8 @@ public class MainActivity extends AppCompatActivity {
                 bubble.addView(body);
             }
 
-            TextView meta = tv(statusText(d, mine), 11, statusColor(d, mine), 0);
+            TextView meta = tv("", 11, mine ? Color.WHITE : Color.GRAY, 0);
+            meta.setText(statusSpannable(d, mine));
             meta.setGravity(Gravity.END);
             meta.setPadding(0, dp(4), 0, 0);
             bubble.addView(meta);
@@ -1383,23 +1404,35 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @SuppressWarnings("unchecked")
-    private String statusText(DocumentSnapshot d, boolean mine) {
+    private CharSequence statusSpannable(DocumentSnapshot d, boolean mine) {
         Timestamp t = d.getTimestamp("createdAt");
         String time = t == null ? "" : String.format(Locale.getDefault(), "%02d:%02d", t.toDate().getHours(), t.toDate().getMinutes());
-        if (!mine) return time;
-        List<String> readBy = (List<String>) d.get("readBy");
-        List<String> deliveredTo = (List<String>) d.get("deliveredTo");
-        if (readBy != null && readBy.size() > 1) return time + "  ✓✓";
-        if (deliveredTo != null && deliveredTo.size() > 1) return time + "  ✓✓";
-        return time + "  ✓";
-    }
 
-    @SuppressWarnings("unchecked")
-    private int statusColor(DocumentSnapshot d, boolean mine) {
-        if (!mine) return Color.GRAY;
+        if (!mine) {
+            return time;
+        }
+
+        // Sesuai request: pesan milik kita selalu tampil centang dua.
+        // Kalau belum dibaca, centang dua tetap putih.
+        // Kalau sudah dibaca, hanya centang dua yang berubah hijau gelap, jam tetap putih.
+        String full = time + "  ✓✓";
+        SpannableString span = new SpannableString(full);
+
         List<String> readBy = (List<String>) d.get("readBy");
-        if (readBy != null && readBy.size() > 1) return Color.rgb(0, 100, 50);
-        return Color.WHITE;
+        boolean isRead = readBy != null && readBy.size() > 1;
+
+        int checkStart = full.indexOf("✓✓");
+        if (checkStart >= 0) {
+            int checkColor = isRead ? Color.rgb(0, 100, 50) : Color.WHITE;
+            span.setSpan(
+                    new ForegroundColorSpan(checkColor),
+                    checkStart,
+                    full.length(),
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            );
+        }
+
+        return span;
     }
 
     @Override
