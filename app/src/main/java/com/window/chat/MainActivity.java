@@ -1043,11 +1043,11 @@ public class MainActivity extends AppCompatActivity {
                 i.putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1);
             }
 
-            if (i.resolveActivity(getPackageManager()) == null) {
+            try {
+                startActivityForResult(i, "video".equals(type) ? REQ_TAKE_VIDEO : REQ_TAKE_PHOTO);
+            } catch (android.content.ActivityNotFoundException e) {
                 toast("Aplikasi kamera tidak ditemukan");
-                return;
             }
-            startActivityForResult(i, "video".equals(type) ? REQ_TAKE_VIDEO : REQ_TAKE_PHOTO);
         } catch (Exception e) {
             toast("Gagal membuka kamera: " + e.getMessage());
         }
