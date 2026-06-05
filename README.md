@@ -17,8 +17,8 @@ Starter project Android chat sederhana memakai Firebase dan GitHub Actions.
 - Chat pribadi.
 - Grup chat.
 - Kirim teks.
-- Kirim foto maksimal 5 MB.
-- Kirim video maksimal 100 MB dan durasi 10 menit.
+- Kirim foto maksimal 5 MB via Cloudinary.
+- Kirim video maksimal 100 MB dan durasi 10 menit via Cloudinary.
 - Preview foto/video di chat.
 - Centang pesan sederhana.
 - Sinkron kontak HP: kontak otomatis muncul jika nomor itu sudah daftar Window.
@@ -30,7 +30,7 @@ Starter project Android chat sederhana memakai Firebase dan GitHub Actions.
 
 - Firebase Authentication: Email/Password.
 - Cloud Firestore.
-- Firebase Storage.
+- Cloudinary untuk upload/preview foto-video.
 - Firebase Cloud Messaging.
 - Cloud Functions untuk notifikasi otomatis.
 
@@ -58,11 +58,12 @@ Authentication → Sign-in method → Email/Password → Enable
 
 6. Buat Firestore Database.
 7. Publish `firestore.rules`.
-8. Buat Storage.
-9. Publish `storage.rules`.
-10. Upload project ke GitHub.
-11. GitHub → Actions → Build Window APK → Run workflow.
-12. Download artifact `Window-debug-apk`.
+8. Buat akun Cloudinary.
+9. Buat unsigned upload preset di Cloudinary.
+10. Isi `cloudinary_cloud_name` dan `cloudinary_upload_preset` di `app/src/main/res/values/strings.xml`.
+11. Upload project ke GitHub.
+12. GitHub → Actions → Build Window APK → Run workflow.
+13. Download artifact `Window-debug-apk`.
 
 ## Cara kerja kontak otomatis
 
@@ -88,3 +89,32 @@ chats/{chatId}/messages/{messageId}
 ## Catatan keamanan
 
 Karena tidak memakai OTP, nomor HP hanya dipakai sebagai ID pencocokan, bukan bukti kepemilikan nomor. Untuk percobaan/MVP tidak masalah, tetapi untuk aplikasi publik serius sebaiknya menambah verifikasi di tahap berikutnya.
+
+
+## Cloudinary setup
+
+Aplikasi versi ini tidak memakai Firebase Storage untuk foto/video. Media diupload langsung dari Android ke Cloudinary memakai unsigned upload preset.
+
+Edit file:
+
+```text
+app/src/main/res/values/strings.xml
+```
+
+Ganti:
+
+```xml
+<string name="cloudinary_cloud_name">GANTI_CLOUD_NAME</string>
+<string name="cloudinary_upload_preset">GANTI_UPLOAD_PRESET_UNSIGNED</string>
+```
+
+menjadi cloud name dan upload preset Cloudinary milik Anda.
+
+Contoh:
+
+```xml
+<string name="cloudinary_cloud_name">windowchat</string>
+<string name="cloudinary_upload_preset">window_unsigned</string>
+```
+
+Catatan: unsigned upload preset cocok untuk MVP/percobaan. Untuk aplikasi publik serius, sebaiknya gunakan signed upload lewat backend agar upload lebih aman.

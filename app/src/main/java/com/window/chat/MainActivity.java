@@ -42,8 +42,15 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.SetOptions;
 import com.google.firebase.messaging.FirebaseMessaging;
-import com.google.firebase.storage.FirebaseStorage;
-import com.google.firebase.storage.StorageReference;
+
+import org.json.JSONObject;
+
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -66,7 +73,6 @@ public class MainActivity extends AppCompatActivity {
 
     private FirebaseAuth auth;
     private FirebaseFirestore db;
-    private FirebaseStorage storage;
     private LinearLayout root;
     private String currentUid;
     private String currentName = "Saya";
@@ -87,7 +93,6 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
-        storage = FirebaseStorage.getInstance();
         askNotificationPermission();
         showLoading("Membuka Window...");
 
@@ -836,12 +841,93 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
         }
-        toast("Upload dimulai...");
-        String ext = "image".equals(type) ? ".jpg" : ".mp4";
-        StorageReference ref = storage.getReference().child("chat_media/" + activeChatId + "/" + System.currentTimeMillis() + ext);
-        ref.putFile(uri).addOnSuccessListener(snapshot -> ref.getDownloadUrl().addOnSuccessListener(url -> {
-            saveMessage(type, type.equals("image") ? "Foto" : "Video", url.toString(), getDisplayName(uri), size);
-        })).addOnFailureListener(e -> toast("Upload gagal: " + e.getMessage()));
+        String cloudName = getString(R.string.cloudinary_cloud_name).trim();
+        String uploadPreset = getString(R.string.cloudinary_upload_preset).trim();
+        if (cloudName.isEmpty() || cloudName.contains("GANTI") || uploadPreset.isEmpty() || uploadPreset.contains("GANTI")) {
+            toast("Cloudinary belum disetting. Isi cloudinary_cloud_name dan cloudinary_upload_preset di strings.xml");
+            return;
+        }
+
+        toast("Upload ke Cloudinary dimulai...");
+        new Thread(() -> {
+            try {
+                String secureUrl = uploadToCloudinary(type, uri, cloudName, uploadPreset);
+                runOnUiThread(() -> saveMessage(type, type.equals("image") ? "Foto" : "Video", secureUrl, getDisplayName(uri), size));
+            } catch (Exception e) {
+                runOnUiThread(() -> toast("Upload gagal: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    private String uploadToCloudinary(String type, Uri uri, String cloudName, String uploadPreset) throws Exception {
+        String resourceType = "video".equals(type) ? "video" : "image";
+        String endpoint = "https://api.cloudinary.com/v1_1/" + cloudName + "/" + resourceType + "/upload";
+        String boundary = "WindowBoundary" + System.currentTimeMillis();
+        HttpURLConnection conn = (HttpURLConnection) new URL(endpoint).openConnection();
+        conn.setRequestMethod("POST");
+        conn.setDoOutput(true);
+        conn.setConnectTimeout(30000);
+        conn.setReadTimeout(120000);
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+
+        try (OutputStream raw = new BufferedOutputStream(conn.getOutputStream())) {
+            writeFormField(raw, boundary, "upload_preset", uploadPreset);
+
+            String fileName = getDisplayName(uri);
+            String mime = getContentResolver().getType(uri);
+            if (mime == null || mime.trim().isEmpty()) {
+                mime = "video".equals(type) ? "video/mp4" : "image/jpeg";
+            }
+
+            raw.write(("--" + boundary + "\r\n").getBytes("UTF-8"));
+            raw.write(("Content-Disposition: form-data; name=\"file\"; filename=\"" + fileName.replace("\"", "") + "\"\r\n").getBytes("UTF-8"));
+            raw.write(("Content-Type: " + mime + "\r\n\r\n").getBytes("UTF-8"));
+
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                if (in == null) throw new Exception("File tidak bisa dibaca");
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    raw.write(buffer, 0, read);
+                }
+            }
+
+            raw.write("\r\n".getBytes("UTF-8"));
+            raw.write(("--" + boundary + "--\r\n").getBytes("UTF-8"));
+            raw.flush();
+        }
+
+        int code = conn.getResponseCode();
+        InputStream responseStream = code >= 200 && code < 300 ? conn.getInputStream() : conn.getErrorStream();
+        String response = readAll(responseStream);
+        conn.disconnect();
+
+        if (code < 200 || code >= 300) {
+            throw new Exception("Cloudinary HTTP " + code + ": " + response);
+        }
+
+        JSONObject json = new JSONObject(response);
+        String secureUrl = json.optString("secure_url", "");
+        if (secureUrl.isEmpty()) throw new Exception("Cloudinary tidak mengembalikan secure_url");
+        return secureUrl;
+    }
+
+    private void writeFormField(OutputStream out, String boundary, String name, String value) throws Exception {
+        out.write(("--" + boundary + "\r\n").getBytes("UTF-8"));
+        out.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n").getBytes("UTF-8"));
+        out.write(value.getBytes("UTF-8"));
+        out.write("\r\n".getBytes("UTF-8"));
+    }
+
+    private String readAll(InputStream in) throws Exception {
+        if (in == null) return "";
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = in.read(buffer)) != -1) {
+            bos.write(buffer, 0, read);
+        }
+        return bos.toString("UTF-8");
     }
 
     private void saveMessage(String type, String text, String mediaUrl, String fileName, long size) {
