@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "000000000000",
-    "project_id": "window-placeholder",
-    "storage_bucket": "window-placeholder.appspot.com"
+    "project_number": "599874307139",
+    "project_id": "window-chat-b371f",
+    "storage_bucket": "window-chat-b371f.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "mobilesdk_app_id": "1:599874307139:android:18b485464ae59e8ff600f6",
         "android_client_info": {
           "package_name": "com.window.chat"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "REPLACE_WITH_FIREBASE_API_KEY"
+          "current_key": "AIzaSyC4ceiST2HO6syJDsT2byHZUoGEvwbb8_c"
         }
       ],
       "services": {
