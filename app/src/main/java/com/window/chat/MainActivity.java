@@ -16,8 +16,10 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Environment;
 import android.provider.OpenableColumns;
 import android.provider.ContactsContract;
+import android.provider.MediaStore;
 import android.text.InputType;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -42,6 +44,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -60,6 +63,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import org.json.JSONObject;
 
 import java.io.BufferedOutputStream;
+import java.io.File;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -69,6 +73,8 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -81,6 +87,9 @@ public class MainActivity extends AppCompatActivity {
     private static final int BG = Color.rgb(244, 246, 250);
     private static final int REQ_PICK_MEDIA = 1001;
     private static final int REQ_CONTACTS = 1002;
+    private static final int REQ_TAKE_PHOTO = 1003;
+    private static final int REQ_TAKE_VIDEO = 1004;
+    private static final int REQ_CAMERA_PERMISSION = 1005;
     private static final long MAX_IMAGE_BYTES = 5L * 1024L * 1024L;
     private static final long MAX_VIDEO_BYTES = 100L * 1024L * 1024L;
     private static final long MAX_VIDEO_DURATION_MS = 10L * 60L * 1000L;
@@ -95,6 +104,8 @@ public class MainActivity extends AppCompatActivity {
     private String activeChatId;
     private String activeChatTitle;
     private String pendingMediaType;
+    private String pendingCameraType;
+    private Uri cameraMediaUri;
     private boolean activeChatIsGroup = false;
     private ListenerRegistration chatsListener;
     private ListenerRegistration messagesListener;
@@ -883,10 +894,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showAttachDialog() {
-        String[] items = {"Foto", "Video"};
+        String[] items = {"Kamera Foto", "Kamera Video", "Galeri Foto", "Galeri Video"};
         new AlertDialog.Builder(this)
                 .setTitle("Kirim Media")
-                .setItems(items, (d, which) -> pickMedia(which == 0 ? "image" : "video"))
+                .setItems(items, (d, which) -> {
+                    if (which == 0) captureMedia("image");
+                    else if (which == 1) captureMedia("video");
+                    else if (which == 2) pickMedia("image");
+                    else pickMedia("video");
+                })
                 .show();
     }
 
@@ -904,6 +920,14 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == REQ_CONTACTS) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) syncContacts();
             else toast("Izin kontak dibutuhkan agar teman otomatis muncul");
+            return;
+        }
+        if (requestCode == REQ_CAMERA_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startCameraIntent(value(pendingCameraType, "image"));
+            } else {
+                toast("Izin kamera dibutuhkan untuk ambil foto/video langsung");
+            }
         }
     }
 
@@ -995,7 +1019,51 @@ public class MainActivity extends AppCompatActivity {
         pendingMediaType = type;
         Intent i = new Intent(Intent.ACTION_GET_CONTENT);
         i.setType(type.equals("image") ? "image/*" : "video/*");
-        startActivityForResult(Intent.createChooser(i, type.equals("image") ? "Pilih Foto" : "Pilih Video"), REQ_PICK_MEDIA);
+        startActivityForResult(Intent.createChooser(i, type.equals("image") ? "Pilih Foto dari Galeri" : "Pilih Video dari Galeri"), REQ_PICK_MEDIA);
+    }
+
+    private void captureMedia(String type) {
+        pendingCameraType = type;
+        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PERMISSION);
+            return;
+        }
+        startCameraIntent(type);
+    }
+
+    private void startCameraIntent(String type) {
+        try {
+            cameraMediaUri = createCameraUri(type);
+            Intent i = new Intent("video".equals(type) ? MediaStore.ACTION_VIDEO_CAPTURE : MediaStore.ACTION_IMAGE_CAPTURE);
+            i.putExtra(MediaStore.EXTRA_OUTPUT, cameraMediaUri);
+            i.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            if ("video".equals(type)) {
+                i.putExtra(MediaStore.EXTRA_DURATION_LIMIT, 10 * 60);
+                i.putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1);
+            }
+
+            if (i.resolveActivity(getPackageManager()) == null) {
+                toast("Aplikasi kamera tidak ditemukan");
+                return;
+            }
+            startActivityForResult(i, "video".equals(type) ? REQ_TAKE_VIDEO : REQ_TAKE_PHOTO);
+        } catch (Exception e) {
+            toast("Gagal membuka kamera: " + e.getMessage());
+        }
+    }
+
+    private Uri createCameraUri(String type) throws Exception {
+        String dirType = "video".equals(type) ? Environment.DIRECTORY_MOVIES : Environment.DIRECTORY_PICTURES;
+        File dir = new File(getExternalFilesDir(dirType), "window_camera");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new Exception("Folder kamera tidak bisa dibuat");
+        }
+
+        String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+        String ext = "video".equals(type) ? ".mp4" : ".jpg";
+        File file = new File(dir, "WINDOW_" + stamp + ext);
+        return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file);
     }
 
     @Override
@@ -1003,6 +1071,14 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQ_PICK_MEDIA && resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
             uploadMedia(pendingMediaType, data.getData());
+            return;
+        }
+        if (requestCode == REQ_TAKE_PHOTO && resultCode == Activity.RESULT_OK && cameraMediaUri != null) {
+            uploadMedia("image", cameraMediaUri);
+            return;
+        }
+        if (requestCode == REQ_TAKE_VIDEO && resultCode == Activity.RESULT_OK && cameraMediaUri != null) {
+            uploadMedia("video", cameraMediaUri);
         }
     }
 
